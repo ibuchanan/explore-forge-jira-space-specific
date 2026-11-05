@@ -1,0 +1,27 @@
+modules:
+  jira:adminPage:
+    - key: space-allowlist-admin
+      resource: main
+      render: native
+      resolver:
+        function: config-resolver
+      title: Peek-a-boo spaces
+  function:
+    - key: config-resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: src/frontend/index.tsx
+  - key: panel
+    path: src/frontend/panel.tsx
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/323d1eae-70b8-4445-97c5-6b448c1d3aaa
+permissions:
+  scopes:
+    # Atlassian documents this classic scope for project search and mypermissions; granular alternatives are beta.
+    # ast-grep-ignore: no-classic-product-scopes
+    - read:jira-work
