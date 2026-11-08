@@ -1,5 +1,6 @@
 import { invoke } from "@forge/bridge";
 import ForgeReconciler, {
+  Box,
   Button,
   Inline,
   Label,
@@ -8,6 +9,7 @@ import ForgeReconciler, {
   Spinner,
   Stack,
   Text,
+  xcss,
 } from "@forge/react";
 import React, { useEffect, useState } from "react";
 
@@ -19,6 +21,8 @@ type Reply<T> =
 
 const failure = (reply: { problem: { detail?: string; title?: string } }) =>
   reply.problem.detail ?? reply.problem.title ?? "An unexpected error occurred";
+
+const selectorWidth = xcss({ width: "100%", maxWidth: "560px" });
 
 const App = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -74,6 +78,7 @@ const App = () => {
   const options = projects
     .filter(({ key }) => !keys?.includes(key))
     .map(({ key, name }) => ({ label: `${name} (${key})`, value: key }));
+  const selectedProject = projects.find(({ key }) => key === selected);
 
   return (
     <Stack space="space.200">
@@ -97,7 +102,7 @@ const App = () => {
       ) : (
         <>
           <Label labelFor="project-select">Add a Jira space</Label>
-          <Inline space="space.100" alignBlock="end">
+          <Box xcss={selectorWidth}>
             <Select
               inputId="project-select"
               options={options}
@@ -107,16 +112,21 @@ const App = () => {
               }
               placeholder="Select a space"
             />
-            <Button
-              isDisabled={!selected || saving}
-              onClick={() => {
-                if (selected) setKeys([...keys, selected]);
-                setSelected(null);
-              }}
-            >
-              Add
-            </Button>
-          </Inline>
+          </Box>
+          {selectedProject && (
+            <Text>
+              Selected: {selectedProject.name} ({selectedProject.key})
+            </Text>
+          )}
+          <Button
+            isDisabled={!selected || saving}
+            onClick={() => {
+              if (selected) setKeys([...keys, selected]);
+              setSelected(null);
+            }}
+          >
+            Add
+          </Button>
           {keys.length === 0 ? (
             <Text>
               No Jira spaces selected. Apply to hide the issue panel everywhere.
