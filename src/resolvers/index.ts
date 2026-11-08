@@ -77,7 +77,7 @@ function fetchResult<T>(
 }
 
 function getPanel(): ResultAsync<Panel | undefined, ProblemDetails> {
-  return fetchResult<Panel[]>(
+  return fetchResult<unknown>(
     () =>
       api
         .asApp()
@@ -86,12 +86,54 @@ function getPanel(): ResultAsync<Panel | undefined, ProblemDetails> {
           { method: "GET" },
         ),
     { operation: "load configuration", method: "GET", auth: "app" },
-  ).map((modules) =>
-    modules.find(
-      (module) =>
-        module.type === "jira:issuePanel" && module.data.resource === "panel",
-    ),
-  );
+  ).andThen((body) => {
+    const page =
+      body !== null && typeof body === "object"
+        ? (body as { modules?: unknown })
+        : null;
+    const result = page && "result" in page ? page.result : body;
+    const modules: unknown = Array.isArray(result)
+      ? result
+      : result !== null &&
+          typeof result === "object" &&
+          "modules" in result &&
+          Array.isArray(result.modules)
+        ? result.modules
+        : null;
+    if (!Array.isArray(modules)) {
+      logger.warn(
+        {
+          responseType: body === null ? "null" : typeof body,
+          hasModules: !!page && "modules" in page,
+          hasData: !!page && "data" in page,
+          hasResults: !!page && "results" in page,
+          responseFields: page
+            ? Object.keys(page)
+                .filter((key) => /^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(key))
+                .slice(0, 12)
+            : [],
+          resultType: result === null ? "null" : typeof result,
+          resultFields:
+            result !== null && typeof result === "object"
+              ? Object.keys(result)
+                  .filter((key) => /^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(key))
+                  .slice(0, 12)
+              : [],
+        },
+        "Unexpected dynamic modules response",
+      );
+      return StandardError.getOrDefault(502).error(
+        "Unexpected dynamic modules response",
+      );
+    }
+    return ok(
+      (modules as Panel[]).find(
+        (module) =>
+          module.type === "jira:issuePanel" &&
+          ["panel", "main/panel"].includes(module.data.resource ?? ""),
+      ),
+    );
+  });
 }
 
 type Project = Required<Pick<components["schemas"]["Project"], "key" | "name">>;
@@ -247,6 +289,7 @@ async function applyConfig(payload: {
               data: {
                 ...(existing && { key: existing.key }),
                 resource: "panel",
+                resolver: { function: "config-resolver" },
                 render: "native",
                 title: "Peek-a-boo",
                 icon: "https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg",

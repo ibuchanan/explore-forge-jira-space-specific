@@ -56,6 +56,114 @@ beforeEach(() => {
 });
 
 describe("admin configuration resolver", () => {
+  it("returns a typed failure for an unexpected dynamic-module response", async () => {
+    requestAtlassian.mockResolvedValue(
+      respond({ items: [], traceId: "private-value" }),
+    );
+    expect(await call("loadAdmin")).toMatchObject({
+      ok: false,
+      problem: { status: 502 },
+    });
+    expect(captured.records).toContainEqual(
+      expect.objectContaining({
+        msg: "Unexpected dynamic modules response",
+        responseType: "object",
+        hasModules: false,
+        hasData: false,
+        hasResults: false,
+        responseFields: ["items", "traceId"],
+      }),
+    );
+    expect(JSON.stringify(captured.records)).not.toContain("private-value");
+  });
+
+  it("logs only the nested result shape when its payload is unknown", async () => {
+    requestAtlassian.mockResolvedValue(
+      respond({ result: { entries: [], privateNote: "sensitive-value" } }),
+    );
+    expect(await call("loadAdmin")).toMatchObject({
+      ok: false,
+      problem: { status: 502 },
+    });
+    expect(captured.records).toContainEqual(
+      expect.objectContaining({
+        msg: "Unexpected dynamic modules response",
+        responseFields: ["result"],
+        resultType: "object",
+        resultFields: ["entries", "privateNote"],
+      }),
+    );
+    expect(JSON.stringify(captured.records)).not.toContain("sensitive-value");
+  });
+
+  it("returns a typed failure for a primitive dynamic-module response", async () => {
+    requestAtlassian.mockResolvedValue(respond("unexpected"));
+    expect(await call("loadAdmin")).toMatchObject({
+      ok: false,
+      problem: { status: 502 },
+    });
+    expect(captured.records).toContainEqual(
+      expect.objectContaining({
+        msg: "Unexpected dynamic modules response",
+        responseType: "string",
+        hasModules: false,
+      }),
+    );
+  });
+
+  it("loads an empty result-wrapped dynamic-module list", async () => {
+    requestAtlassian.mockResolvedValue(respond({ result: [] }));
+    expect(await call("loadAdmin")).toEqual({
+      ok: true,
+      value: {
+        projects: [
+          { key: "ALPHA", name: "Alpha" },
+          { key: "BETA", name: "Beta" },
+        ],
+        projectKeys: [],
+      },
+    });
+  });
+
+  it("loads applied keys from a result-wrapped module list", async () => {
+    requestAtlassian.mockResolvedValue(
+      respond({
+        result: {
+          modules: [
+            {
+              key: "generated-id",
+              type: "jira:issuePanel",
+              data: {
+                resource: "main/panel",
+                displayConditions: { projectKey: ["BETA"] },
+              },
+            },
+          ],
+        },
+      }),
+    );
+    expect(await call("loadAdmin")).toMatchObject({
+      ok: true,
+      value: { projectKeys: ["BETA"] },
+    });
+  });
+
+  it("loads configuration from a paginated dynamic-module response", async () => {
+    requestAtlassian.mockResolvedValue(
+      respond({ modules: [], nextPageToken: null }),
+    );
+    expect(await call("loadAdmin")).toEqual({
+      ok: true,
+      value: {
+        projects: [
+          { key: "ALPHA", name: "Alpha" },
+          { key: "BETA", name: "Beta" },
+        ],
+        projectKeys: [],
+      },
+    });
+  });
+
   it("loads project choices and applied keys in one admin request", async () => {
     requestAtlassian.mockResolvedValue(
       respond([
@@ -63,7 +171,7 @@ describe("admin configuration resolver", () => {
           key: "generated-id",
           type: "jira:issuePanel",
           data: {
-            resource: "panel",
+            resource: "main/panel",
             displayConditions: { projectKey: ["BETA"] },
           },
         },
@@ -250,6 +358,7 @@ describe("admin configuration resolver", () => {
       type: "jira:issuePanel",
       data: {
         resource: "panel",
+        resolver: { function: "config-resolver" },
         render: "native",
         displayConditions: { projectKey: ["ALPHA", "BETA"] },
       },
@@ -265,14 +374,14 @@ describe("admin configuration resolver", () => {
     );
   });
 
-  it("updates the existing panel instead of creating a duplicate", async () => {
+  it("updates the existing multi-entry panel instead of creating a duplicate", async () => {
     requestAtlassian
       .mockResolvedValueOnce(
         respond([
           {
             key: "generated-id",
             type: "jira:issuePanel",
-            data: { resource: "panel" },
+            data: { resource: "main/panel" },
           },
         ]),
       )
@@ -281,6 +390,9 @@ describe("admin configuration resolver", () => {
       ok: true,
       value: { projectKeys: ["BETA"] },
     });
+    expect(
+      JSON.parse(requestAtlassian.mock.calls[1]?.[1]?.body).data.resource,
+    ).toBe("panel");
     expect(requestAtlassian.mock.calls[1]?.[0]).toContain("/generated-id");
     expect(requestAtlassian.mock.calls[1]?.[1]?.method).toBe("PUT");
   });
@@ -325,7 +437,7 @@ describe("admin configuration resolver", () => {
           {
             key: "generated-id",
             type: "jira:issuePanel",
-            data: { resource: "panel" },
+            data: { resource: "main/panel" },
           },
         ]),
       )
@@ -344,7 +456,7 @@ describe("admin configuration resolver", () => {
           key: "generated-id",
           type: "jira:issuePanel",
           data: {
-            resource: "panel",
+            resource: "main/panel",
             title: "Peek-a-boo",
             displayConditions: { projectKey: ["ALPHA", "BETA"] },
           },
