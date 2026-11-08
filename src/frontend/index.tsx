@@ -77,6 +77,12 @@ const App = () => {
 
   return (
     <Stack space="space.200">
+      <SectionMessage appearance="warning" title="Work in progress">
+        <Text>
+          This app is not complete and may not work as expected. The Peek-a-boo
+          issue panel may fail to load even after you apply the project list.
+        </Text>
+      </SectionMessage>
       <Text>
         Choose Jira spaces where the Peek-a-boo issue panel should appear.
         Changes take effect when you apply the list.
